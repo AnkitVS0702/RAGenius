@@ -6,10 +6,11 @@ import { Button } from "./ui/button";
 import { IoSend, IoClose } from "react-icons/io5";
 import { Label } from "./ui/label";
 import GradientText from "./ui/GradientText";
-import { IoMdSettings, IoMdLogOut } from "react-icons/io";
+import { IoMdSettings } from "react-icons/io";
 import { SkeletonDemo } from "./ui/SkeletonDemo";
-import { IoMdLogIn } from "react-icons/io";
 import { FaHistory } from "react-icons/fa";
+import { BiExpandAlt, BiCollapseAlt } from "react-icons/bi"; // Added resize icons
+import { FiLogOut, FiLogIn } from "react-icons/fi"; // More distinct login/logout icons
 import axios from "axios";
 import { format } from "date-fns";
 
@@ -23,6 +24,57 @@ function ChatBox({ onClose }) {
   const [message, setMessage] = useState("");
   const [showConversation, setShowConversation] = useState(false);
   const conversationRef = useRef(null);
+  const chatBoxRef = useRef(null);
+  
+  // New state for chatbot size and position
+  const [size, setSize] = useState(() => {
+    const savedSize = localStorage.getItem('chatbotSize');
+    // Ensure initial size is within limits
+    const defaultSize = { width: 40, height: 80 };
+    if (savedSize) {
+      const parsedSize = JSON.parse(savedSize);
+      return { 
+        width: Math.max(parsedSize.width, 40), // Minimum width is now 40%
+        height: Math.max(parsedSize.height, 50) // Minimum height is now 50%
+      };
+    }
+    return defaultSize;
+  });
+  
+  // Track window dimensions for responsive positioning
+  const [windowDimensions, setWindowDimensions] = useState({
+    height: window.innerHeight,
+    width: window.innerWidth
+  });
+
+  // Update window dimensions when resized
+  useEffect(() => {
+    function handleResize() {
+      setWindowDimensions({
+        height: window.innerHeight,
+        width: window.innerWidth
+      });
+    }
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Adjust position if necessary when size changes
+  useEffect(() => {
+    if (chatBoxRef.current) {
+      const rect = chatBoxRef.current.getBoundingClientRect();
+      if (rect.top < 0) {
+        // If the top is off-screen, adjust position
+        chatBoxRef.current.style.bottom = 'auto';
+        chatBoxRef.current.style.top = '10px';
+      } else {
+        // Default positioning from bottom - moved closer to bottom
+        chatBoxRef.current.style.bottom = '2rem'; // Changed from 6rem to 2rem
+        chatBoxRef.current.style.top = 'auto';
+      }
+    }
+  }, [size, windowDimensions]);
 
   useEffect(() => {
     // Check if user is logged in
@@ -35,6 +87,11 @@ function ChatBox({ onClose }) {
       conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
     }
   }, [chatHistory, showConversation]);
+  
+  // Save size preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('chatbotSize', JSON.stringify(size));
+  }, [size]);
 
   const handleSettingsClick = () => {
     navigate("/admin");
@@ -48,6 +105,29 @@ function ChatBox({ onClose }) {
     localStorage.removeItem("userToken");
     setIsLoggedIn(false);
     setShowHistory(false);
+  };
+  
+  // Size adjustment functions with screen boundary check
+  const increaseSize = () => {
+    setSize(prevSize => {
+      const newHeight = Math.min(prevSize.height + 5, 95);
+      
+      // Calculate if new height would fit in viewport
+      const availableHeight = windowDimensions.height - 32; // Changed from 96 to 32 (2rem)
+      const maxHeight = (availableHeight / windowDimensions.height) * 100;
+      
+      return {
+        width: Math.min(prevSize.width + 5, 80),
+        height: Math.min(newHeight, maxHeight)
+      };
+    });
+  };
+  
+  const decreaseSize = () => {
+    setSize(prevSize => ({
+      width: Math.max(prevSize.width - 5, 40),  // Increased from 30 to 40
+      height: Math.max(prevSize.height - 5, 50)  // Increased from 40 to 50
+    }));
   };
 
   const handleHistoryClick = async () => {
@@ -106,7 +186,16 @@ function ChatBox({ onClose }) {
   };
 
   return (
-    <div className="fixed bottom-24 right-8 h-[80%] w-[40%]">
+    <div 
+      ref={chatBoxRef}
+      className="fixed right-8" 
+      style={{ 
+        height: `${size.height}%`, 
+        width: `${size.width}%`, 
+        bottom: '2rem', // Changed from 6rem to 2rem
+        transition: 'all 0.3s ease'
+      }}
+    >
       <SpotlightCard
         className="custom-spotlight-card h-full flex flex-col"
         spotlightColor="rgba(0, 229, 255, 0.2)"
@@ -118,6 +207,7 @@ function ChatBox({ onClose }) {
               size="icon"
               onClick={handleHistoryClick}
               className="text-blue-500 text-3xl hover:bg-blue-800 hover:text-white"
+              title="View history"
             >
               <FaHistory />
             </Button>
@@ -131,41 +221,67 @@ function ChatBox({ onClose }) {
             Welcome to Sahayak
           </GradientText>
 
-          {isLoggedIn ? (
+          <div className="flex items-center space-x-1">
+            {/* Resize buttons */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleLogout}
-              className="text-pink-500 text-3xl hover:bg-pink-800 hover:text-white"
+              onClick={decreaseSize}
+              className="text-yellow-500 hover:bg-yellow-800 hover:text-white"
+              title="Decrease size"
             >
-              <IoMdLogOut />
+              <BiCollapseAlt className="h-5 w-5" />
             </Button>
-          ) : (
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleLoginClick}
-              className="text-pink-500 text-3xl hover:bg-pink-800 hover:text-white"
+              onClick={increaseSize}
+              className="text-yellow-500 hover:bg-yellow-800 hover:text-white"
+              title="Increase size"
             >
-              <IoMdLogIn />
+              <BiExpandAlt className="h-5 w-5" />
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSettingsClick}
-            className="text-blue-500 text-3xl hover:bg-blue-800 hover:text-white"
-          >
-            <IoMdSettings />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="text-red-500 hover:bg-red-800 hover:text-white"
-          >
-            <IoClose className="h-6 w-6" />
-          </Button>
+
+            {isLoggedIn ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-pink-500 text-3xl hover:bg-pink-800 hover:text-white"
+                title="Log out"
+              >
+                <FiLogOut className="h-5 w-5" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLoginClick}
+                className="text-pink-500 text-3xl hover:bg-pink-800 hover:text-white"
+                title="Log in"
+              >
+                <FiLogIn className="h-5 w-5" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSettingsClick}
+              className="text-blue-500 text-3xl hover:bg-blue-800 hover:text-white"
+              title="Admin Login"
+            >
+              <IoMdSettings />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="text-red-500 hover:bg-red-800 hover:text-white"
+              title="Close"
+            >
+              <IoClose className="h-6 w-6" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -199,6 +315,7 @@ function ChatBox({ onClose }) {
                   variant="ghost"
                   onClick={handleLoginClick}
                   className="ml-2 text-pink-500 hover:bg-pink-800 hover:text-white"
+                  title="Log in to view history"
                 >
                   Login
                 </Button>
@@ -248,7 +365,7 @@ function ChatBox({ onClose }) {
                 }}
               />
             </div>
-            <Button className="h-[50px] px-4" onClick={handleSendMessage}>
+            <Button className="h-[50px] px-4" onClick={handleSendMessage} title="Send message">
               <IoSend className="h-5 w-5" />
             </Button>
           </div>
